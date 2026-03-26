@@ -6,7 +6,7 @@ export interface GpodderUpdate {
   position: number
   total: number
   timestamp: number
-  action: 'DOWNLOAD' | 'PLAY' | 'DELETE' | 'NEW'
+  action: 'download' | 'play' | 'delete' | 'new'
 }
 
 export interface ServerGpodderUpdate extends GpodderUpdate {
@@ -19,6 +19,7 @@ export interface Credentials {
   server: string
   user: string
   password: string
+  deviceName?: string
 }
 
 export type SyncProtocol = 'nextcloud' | 'gpodder' | null

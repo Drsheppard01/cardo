@@ -18,11 +18,32 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const provider = useRef<ReturnType<ProtocolFn>>(null)
   const { playing, reload } = usePlayer()
 
-  async function logIn() {
+  async function initProvider(forceReinitialize = false) {
+    if (!loggedIn) {
+      provider.current = null
+      return null
+    }
+
+    if (provider.current && !forceReinitialize) {
+      return provider.current
+    }
+
     if (loggedIn === 'nextcloud') {
       provider.current = await nextcloudProtocol(await getProviderCreds('nextcloud'))
     } else if (loggedIn === 'gpodder') {
       provider.current = await gpodderProtocol(await getProviderCreds('gpodder'))
+    }
+
+    return provider.current
+  }
+
+  async function logIn() {
+    try {
+      await initProvider(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setStatus('error')
+      return
     }
 
     if (loggedIn && syncSettings.syncAfterAppStart) {
@@ -38,10 +59,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const creds: any = await getCreds(protocol)
     const syncKey = await getSyncKey()
 
-    const { server, loginName: encryptedLoginName, appPassword: encryptedAppPassword } = creds
+    if (!creds) {
+      throw new Error('Sync credentials missing. Please connect again.')
+    }
+    if (!syncKey) {
+      throw new Error('Sync key missing. Please reconnect sync in settings.')
+    }
+
+    const { server, loginName: encryptedLoginName, appPassword: encryptedAppPassword, deviceName } = creds
     const loginName: string = await invoke('decrypt', { encryptedText: encryptedLoginName, base64Key: syncKey })
     const appPassword: string = await invoke('decrypt', { encryptedText: encryptedAppPassword, base64Key: syncKey })
-    return { server: server, user: loginName, password: appPassword }
+    return { server: server, user: loginName, password: appPassword, deviceName }
   }
 
   const load = async () => {
@@ -58,8 +86,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const sync = async (updateSubscriptions?: Partial<SubscriptionsUpdate>) => {
     try {
-      if (!provider.current) {
-        throw new Error('Provider not initialized')
+      const syncProvider = await initProvider()
+      if (!syncProvider) {
+        throw new Error('Not connected to a sync provider')
       }
 
       setError('')
@@ -68,7 +97,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       const lastSync = Math.floor((await getLastSync()) / 1000) // gpodder api uses seconds
 
       // #region subscriptions
-      const subsServerUpdates: SubscriptionsUpdate = await provider.current.pullSubscriptions(lastSync)
+      const subsServerUpdates: SubscriptionsUpdate = await syncProvider.pullSubscriptions(lastSync)
       const localSubscriptions = subscriptions.subscriptions.map((sub) => sub.feedUrl)
 
       // add new subscriptions
@@ -91,12 +120,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (updateSubscriptions !== undefined) {
-        await provider.current.pushSubscriptions({ add: [], remove: [], ...updateSubscriptions })
+        await syncProvider.pushSubscriptions({ add: [], remove: [], ...updateSubscriptions })
       }
       // #endregion
 
       // #region episodes
-      const serverUpdates = await provider.current.pullEpisodes(lastSync)
+      const serverUpdates = await syncProvider.pullEpisodes(lastSync)
 
       if (serverUpdates.length > 0) {
         for (const update of serverUpdates) {
@@ -117,17 +146,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         position: update.position,
         started: update.position,
         total: update.total,
-        action: 'PLAY',
+        action: 'play',
         timestamp: update.timestamp,
       }))
 
-      await provider.current.pushEpisodes(gpodderLocalUpdates)
+      await syncProvider.pushEpisodes(gpodderLocalUpdates)
       // #endregion
 
       await setLastSync(Date.now())
       setStatus('ok')
     } catch (e) {
-      console.error(e)
+      console.error(String(e))
       setError(e instanceof Error ? e.message : String(e))
       setStatus('error')
     }
