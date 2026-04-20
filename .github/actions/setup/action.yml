@@ -31,7 +31,7 @@ runs:
         sudo apt install libappindicator3-dev \
         librsvg2-dev \
         patchelf \
-        libwebkit2gtk-4.1-0 \ 
+        libwebkit2gtk-4.1-0 \
         libwebkit2gtk-4.1-dev \
         libjavascriptcoregtk-4.1-0 \
         libjavascriptcoregtk-4.1-dev \
