@@ -28,7 +28,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt install libappindicator3-dev \
+        sudo apt install -y libappindicator3-dev \
         librsvg2-dev \
         patchelf \
         libwebkit2gtk-4.1-dev \
